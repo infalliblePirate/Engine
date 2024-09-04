@@ -403,10 +403,10 @@ namespace Deimos {
 
         std::vector<unsigned int> ovalIndices;
         ovalIndices.resize(3 * (vCount - 2));
-        for (size_t i = 0, j = 0; i < vCount - 2; ++i) {
-            ovalIndices[j++] = 0; // origin point
-            ovalIndices[j++] = i + 1;
-            ovalIndices[j++] = i + 2;
+        for (size_t i = 0; i < vCount - 2; ++i) {
+            ovalIndices.push_back(0); // origin point
+            ovalIndices.push_back(i + 1);
+            ovalIndices.push_back(i + 2);
         }
 
         Ref<IndexBuffer> ovalIB = IndexBuffer::create(ovalIndices.data(), sizeof(unsigned int) * ovalIndices.size() / sizeof(unsigned int));
@@ -430,10 +430,10 @@ namespace Deimos {
         s_data->polygonVertexArray = Deimos::VertexArray::create();
 
         Ref<VertexBuffer> polygonVB; 
-        for (size_t i = 0, j = 0; i < vCount; ++i) {
-            polygonVertices[j++] = vertices[i].x;
-            polygonVertices[j++] = vertices[i].y;
-            polygonVertices[j++] = vertices[i].z;
+        for (size_t i = 0; i < vCount; ++i) {
+            polygonVertices.push_back(vertices[i].x);
+            polygonVertices.push_back(vertices[i].y);
+            polygonVertices.push_back(vertices[i].z);
         }
 
         polygonVB = VertexBuffer::create(polygonVertices.data(), sizeof(float) * polygonVertices.size());
@@ -458,14 +458,14 @@ namespace Deimos {
         //             ...
         //          10 8 9
         while (left < right) {
-            polygonIndices[index++] = left;
-            polygonIndices[index++] = left + 1;
-            polygonIndices[index++] = right;
+            polygonIndices.push_back(left);
+            polygonIndices.push_back(left + 1);
+            polygonIndices.push_back(right);
 
             if (left + 1 < right - 1) { // fails for odd number of triangles
-                polygonIndices[index++] = right;
-                polygonIndices[index++] = left + 1;
-                polygonIndices[index++] = right - 1;
+                polygonIndices.push_back(right);
+                polygonIndices.push_back(left + 1);
+                polygonIndices.push_back(right - 1);
             }
 
             left++;
