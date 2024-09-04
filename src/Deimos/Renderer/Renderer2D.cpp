@@ -430,10 +430,10 @@ namespace Deimos {
         s_data->polygonVertexArray = Deimos::VertexArray::create();
 
         Ref<VertexBuffer> polygonVB; 
-        for (size_t i = 0; i < vCount; ++i) {
-            polygonVertices.push_back(vertices[i].x);
-            polygonVertices.push_back(vertices[i].y);
-            polygonVertices.push_back(vertices[i].z);
+        for (size_t i = 0, j = 0; i < vCount; ++i) {
+            polygonVertices[j++] = vertices[i].x;
+            polygonVertices[j++] = vertices[i].y;
+            polygonVertices[j++] = vertices[i].z;
         }
 
         polygonVB = VertexBuffer::create(polygonVertices.data(), sizeof(float) * polygonVertices.size());
