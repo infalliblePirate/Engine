@@ -4,6 +4,15 @@
 
 namespace Deimos {
 
+    Ref<VertexBuffer> VertexBuffer::create(uint32_t size) {
+        switch (Renderer::getAPI()) {
+            case RendererAPI::API::None: DM_ASSERT(false, "Deimos currently does not support RendererAPI::None!");
+            case RendererAPI::API::OpenGL: return createRef<OpenGLVertexBuffer>(size);
+        }
+        DM_ASSERT(false, "Unknown RendererAPI!");
+        return nullptr;
+    }
+
     Ref<VertexBuffer> VertexBuffer::create(float* vertices, uint32_t size) {
         switch (Renderer::getAPI()) {
             case RendererAPI::API::None: DM_ASSERT(false, "Deimos currently does not support RendererAPI::None!");

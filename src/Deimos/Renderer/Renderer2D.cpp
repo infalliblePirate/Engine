@@ -14,9 +14,27 @@
 
 namespace Deimos {
 
-    struct Renderer2DStorage {
-        Ref<VertexArray> lineVertexArray;
+    struct QuadVertex {
+        glm::vec3 position;
+        glm::vec4 color;
+        glm::vec2 texCoord;
+        // TODO: texid
+    };
+
+    struct Renderer2DData {
+        const uint32_t maxQuads = 10'000;
+        const uint32_t maxVertices = maxQuads * 4;
+        const uint32_t maxIndices = maxQuads * 6;
+
+        QuadVertex* quadVertexBufferBase = nullptr;
+        QuadVertex* quadVertexBufferPtr = nullptr;
+
+        uint32_t quadIndexCount = 0;
+
+        Ref<VertexBuffer> quadVB;
         Ref<VertexArray> quadVertexArray;
+
+        Ref<VertexArray> lineVertexArray;
         Ref<VertexArray> triangleVertexArray;
         Ref<VertexArray> circleVertexArray;
         Ref<VertexArray> ovalVertexArray;
@@ -28,75 +46,84 @@ namespace Deimos {
         Ref<Texture2D> whiteTexture;
     };
 
-    static Renderer2DStorage* s_data;
+    static Renderer2DData s_data;
 
     void Renderer2D::init() {
         DM_PROFILE_FUNCTION();
 
-        s_data = new Renderer2DStorage();
-
         // LINE
-        s_data->lineVertexArray = VertexArray::create();
-        float lineVertices[2 * 3]{
-            0.0f, 0.0f, 0.0f, 
-            1.f, 0.0f, 0.0f,
-        };
+        {
+            s_data.lineVertexArray = VertexArray::create();
+            float lineVertices[2 * 3]{
+                0.0f, 0.0f, 0.0f, 
+                1.f, 0.0f, 0.0f,
+            };
 
-        Ref<VertexBuffer> lineVB;
-        lineVB = VertexBuffer::create(lineVertices, sizeof(lineVertices));
-        lineVB->setLayout(
-            {
-                { ShaderDataType::Float3, "a_position" }
-            }
-        );
+            Ref<VertexBuffer> lineVB;
+            lineVB = VertexBuffer::create(lineVertices, sizeof(lineVertices));
+            lineVB->setLayout(
+                {
+                    { ShaderDataType::Float3, "a_position" }
+                }
+            );
 
-        s_data->lineVertexArray->addVertexBuffer(lineVB);
+            s_data.lineVertexArray->addVertexBuffer(lineVB);
 
-        unsigned int lineindices[2] = { 0, 1 };
+            unsigned int lineindices[2] = { 0, 1 };
 
-        Ref<IndexBuffer> lineIB;
-        lineIB = IndexBuffer::create(lineindices, sizeof(lineindices) / sizeof(unsigned int));
+            Ref<IndexBuffer> lineIB;
+            lineIB = IndexBuffer::create(lineindices, sizeof(lineindices) / sizeof(unsigned int));
 
-        s_data->lineVertexArray->setIndexBuffer(lineIB);
+            s_data.lineVertexArray->setIndexBuffer(lineIB);
 
-        s_data->plainColorShader = Shader::create(std::string(ASSETS_DIR) + "/shaders/PlainColor.glsl");
+            s_data.plainColorShader = Shader::create(std::string(ASSETS_DIR) + "/shaders/PlainColor.glsl");
+        }
 
         // QUAD
-        s_data->quadVertexArray = Deimos::VertexArray::create();
-        float squareVertices[5 * 4] = {
-                -0.5f, -0.5f, 0.0f, 0.f, 0.f,
-                0.5f, -0.5f, 0.0f, 1.f, 0.f,
-                0.5f, 0.5f, 0.0f, 1.f, 1.f,
-                -0.5f, 0.5f, 0.0f, 0.f, 1.f
-        };
+        s_data.quadVertexBufferBase = new QuadVertex[s_data.maxVertices];
+        s_data.quadVertexBufferPtr = s_data.quadVertexBufferBase;
 
-        Ref<VertexBuffer> squareVB;
-        squareVB = VertexBuffer::create(squareVertices, sizeof(squareVertices));
-        squareVB->setLayout(
+        s_data.quadVertexArray = Deimos::VertexArray::create();
+
+        s_data.quadVB = VertexBuffer::create(s_data.maxVertices * sizeof(QuadVertex));
+        s_data.quadVB->setLayout(
                 {
                         { ShaderDataType::Float3, "a_position" },
+                        { ShaderDataType::Float4, "a_color" },
                         { ShaderDataType::Float2, "a_texCoord" }
                 });
-        s_data->quadVertexArray->addVertexBuffer(squareVB);
+        s_data.quadVertexArray->addVertexBuffer(s_data.quadVB);
 
-        unsigned int squareIndices[6] = {0, 1, 2, 2, 3, 0};
+        unsigned int* quadIndices = new unsigned int[s_data.maxIndices];
 
-        Ref<IndexBuffer> squareIB;
-        squareIB = IndexBuffer::create(squareIndices, sizeof(squareIndices) / sizeof(unsigned int));
+        uint32_t offset = 0;
+        for (size_t i = 0; i < s_data.maxIndices; i += 6) {
+            quadIndices[i + 0] = offset + 0;
+            quadIndices[i + 1] = offset + 1;
+            quadIndices[i + 2] = offset + 2;
+            
+            quadIndices[i + 3] = offset + 2;
+            quadIndices[i + 4] = offset + 3;
+            quadIndices[i + 5] = offset + 0;
 
-        s_data->quadVertexArray->setIndexBuffer(squareIB);
-        s_data->textureShader = Shader::create(std::string(ASSETS_DIR) + "/shaders/Texture.glsl");
+            offset += 4;
+        }
 
-        s_data->whiteTexture = Texture2D::create(1, 1);
+        Ref<IndexBuffer> quadIB = IndexBuffer::create(quadIndices, s_data.maxIndices);
+        s_data.quadVertexArray->setIndexBuffer(quadIB);
+        delete[] quadIndices;
+
+        s_data.textureShader = Shader::create(std::string(ASSETS_DIR) + "/shaders/Texture.glsl");
+
+        s_data.whiteTexture = Texture2D::create(1, 1);
         uint32_t whiteTextureData = 0xffffffff;
-        s_data->whiteTexture->setData(&whiteTextureData, sizeof(uint32_t));
+        s_data.whiteTexture->setData(&whiteTextureData, sizeof(uint32_t));
 
-        s_data->textureShader->bind();
-        s_data->textureShader->setInt("u_texture", 0);
-
+        s_data.textureShader->bind();
+        s_data.textureShader->setInt("u_texture", 0);
 
         // TRIANGLE:
-        s_data->triangleVertexArray = VertexArray::create();
+        s_data.triangleVertexArray = VertexArray::create();
         float triangleVertices[3 * 3]{
             -0.5f, -0.5f, 0.0f, 
             0.5f, -0.5f, 0.0f,
@@ -111,16 +138,16 @@ namespace Deimos {
             }
         );
 
-        s_data->triangleVertexArray->addVertexBuffer(triangleVB);
+        s_data.triangleVertexArray->addVertexBuffer(triangleVB);
 
         unsigned int triangleindices[3] = { 0, 1, 2 };
 
         Ref<IndexBuffer> triangleIB;
         triangleIB = IndexBuffer::create(triangleindices, sizeof(triangleindices) / sizeof(unsigned int));
 
-        s_data->triangleVertexArray->setIndexBuffer(triangleIB);
+        s_data.triangleVertexArray->setIndexBuffer(triangleIB);
 
-        s_data->plainColorShader = Shader::create(std::string(ASSETS_DIR) + "/shaders/PlainColor.glsl");
+        s_data.plainColorShader = Shader::create(std::string(ASSETS_DIR) + "/shaders/PlainColor.glsl");
 
 
         // CIRCLE
@@ -140,7 +167,7 @@ namespace Deimos {
             temp.push_back(glm::vec3(x, y, z));
         }
 
-        s_data->circleVertexArray = VertexArray::create();
+        s_data.circleVertexArray = VertexArray::create();
 
         std::vector<float> circleVertices;
         circleVertices.reserve(3 * vCount); // create circle vertices array
@@ -158,7 +185,7 @@ namespace Deimos {
             }
         );
 
-        s_data->circleVertexArray->addVertexBuffer(circleVB);
+        s_data.circleVertexArray->addVertexBuffer(circleVB);
 
        std::vector<unsigned int> circleIndices;
        circleIndices.resize(3 * triangleCount);
@@ -171,27 +198,34 @@ namespace Deimos {
         Ref<IndexBuffer> circleIB;
         circleIB = IndexBuffer::create(circleIndices.data(), sizeof(unsigned int) * circleIndices.size() / sizeof(unsigned int));
 
-        s_data->circleVertexArray->setIndexBuffer(circleIB);
+        s_data.circleVertexArray->setIndexBuffer(circleIB);
     }
 
     void Renderer2D::shutdown() {
         DM_PROFILE_FUNCTION();
-
-        delete s_data;
     }
 
     void Renderer2D::beginScene(const OrthographicCamera &camera) {
         DM_PROFILE_FUNCTION();
 
-        s_data->textureShader->bind();
-        s_data->textureShader->setMat4("u_viewProjection", camera.getViewProjectionMatrix());
+        s_data.quadIndexCount = 0;
+        s_data.quadVertexBufferPtr = s_data.quadVertexBufferBase;
 
-        s_data->plainColorShader->bind();
-        s_data->plainColorShader->setMat4("u_viewProjection", camera.getViewProjectionMatrix());
+        s_data.textureShader->bind();
+        s_data.textureShader->setMat4("u_viewProjection", camera.getViewProjectionMatrix());
+
+        s_data.plainColorShader->bind();
+        s_data.plainColorShader->setMat4("u_viewProjection", camera.getViewProjectionMatrix());
     }
 
     void Renderer2D::endScene() {
         DM_PROFILE_FUNCTION();
+
+        uint32_t size = (uint8_t*)s_data.quadVertexBufferPtr - (uint8_t*)s_data.quadVertexBufferBase;
+        s_data.quadVB->setData(s_data.quadVertexBufferBase, size * sizeof(QuadVertex));
+        
+        s_data.quadVertexArray->bind();
+        RenderCommand::drawIndexed(s_data.quadVertexArray, s_data.quadIndexCount);
     }
 
     void Renderer2D::drawLine(const glm::vec2 &start, const glm::vec2 &end, float thickness, const glm::vec4 &color, float tilingFactor, const glm::vec4 &tintColor) {
@@ -201,7 +235,7 @@ namespace Deimos {
     void Renderer2D::drawLine(const glm::vec3 &start, const glm::vec3 &end, float thickness, const glm::vec4 &color, float tilingFactor, const glm::vec4 &tintColor) {
         DM_PROFILE_FUNCTION();
 
-        s_data->plainColorShader->bind();
+        s_data.plainColorShader->bind();
         glm::vec3 direction = end - start; // direction vector
         float length = glm::length(direction);
 
@@ -215,11 +249,11 @@ namespace Deimos {
         transform = glm::scale(transform, glm::vec3(length, 1.f, 1.0f)); // strech along the x axis
 
 
-        s_data->plainColorShader->setMat4("u_transform", transform);
-        s_data->plainColorShader->setFloat4("u_color", color * tintColor);
+        s_data.plainColorShader->setMat4("u_transform", transform);
+        s_data.plainColorShader->setFloat4("u_color", color * tintColor);
 
-        s_data->lineVertexArray->bind();
-        RenderCommand::drawLine(s_data->lineVertexArray, thickness);
+        s_data.lineVertexArray->bind();
+        RenderCommand::drawLine(s_data.lineVertexArray, thickness);
     }
 
     void Renderer2D::drawQuad(const glm::vec2 &position, const glm::vec2 &size, const glm::vec4 &color, float tilingFactor, const glm::vec4& tintColor) {
@@ -229,17 +263,29 @@ namespace Deimos {
     void Renderer2D::drawQuad(const glm::vec3 &position, const glm::vec2 &size, const glm::vec4 &color, float tilingFactor, const glm::vec4& tintColor) {
         DM_PROFILE_FUNCTION();
 
-        s_data->textureShader->bind();
-        s_data->whiteTexture->bind();
+        s_data.textureShader->bind();
 
-        glm::mat4 transform = glm::translate(glm::mat4(1.f), position) * glm::scale(glm::mat4(1.f), { size.x, size.y, 1.f });
-        s_data->textureShader->setMat4("u_transform", transform);
-        s_data->textureShader->setFloat4("u_color", color * tintColor);
-        s_data->textureShader->setInt("u_texture", 0);
-        s_data->textureShader->setFloat("u_tilingFactor", tilingFactor);
+        s_data.quadVertexBufferPtr->position = position;
+        s_data.quadVertexBufferPtr->color = color;
+        s_data.quadVertexBufferPtr->texCoord = { 0, 0 };
+        s_data.quadVertexBufferPtr++;
 
-        s_data->quadVertexArray->bind();
-        RenderCommand::drawIndexed(s_data->quadVertexArray);
+        s_data.quadVertexBufferPtr->position = { position.x + size.x, position.y, position.z };
+        s_data.quadVertexBufferPtr->color = color;
+        s_data.quadVertexBufferPtr->texCoord = { 1, 0 };
+        s_data.quadVertexBufferPtr++;
+
+        s_data.quadVertexBufferPtr->position = { position.x + size.x, position.y + size.y, position.z };
+        s_data.quadVertexBufferPtr->color = color;
+        s_data.quadVertexBufferPtr->texCoord = { 1, 1 };
+        s_data.quadVertexBufferPtr++;
+
+        s_data.quadVertexBufferPtr->position = { position.x, position.y + size.y, position.z };
+        s_data.quadVertexBufferPtr->color = color;
+        s_data.quadVertexBufferPtr->texCoord = { 0, 1 };
+        s_data.quadVertexBufferPtr++;
+
+        s_data.quadIndexCount += 6;
     }
 
     /**@param rotation The rotation of the quad in radians*/
@@ -251,17 +297,17 @@ namespace Deimos {
     void Renderer2D::drawRotatedQuad(const glm::vec3 &position, const glm::vec2 &size, const glm::vec4 &color, float rotation, float tilingFactor, const glm::vec4& tintColor) {
         DM_PROFILE_FUNCTION()
 
-        s_data->textureShader->bind();
-        s_data->whiteTexture->bind();
+        s_data.textureShader->bind();
+        s_data.whiteTexture->bind();
 
         glm::mat4 transform = glm::translate(glm::mat4(1.f), position) * glm::rotate(glm::mat4(1.f), rotation, { 0, 0, 1}) * glm::scale(glm::mat4(1.f), { size.x, size.y, 1.f });
-        s_data->textureShader->setMat4("u_transform", transform);
-        s_data->textureShader->setFloat4("u_color", color * tintColor);
-        s_data->textureShader->setInt("u_texture", 0);
-        s_data->textureShader->setFloat("u_tilingFactor", tilingFactor);
+        s_data.textureShader->setMat4("u_transform", transform);
+        s_data.textureShader->setFloat4("u_color", color * tintColor);
+        s_data.textureShader->setInt("u_texture", 0);
+        s_data.textureShader->setFloat("u_tilingFactor", tilingFactor);
 
-        s_data->quadVertexArray->bind();
-        RenderCommand::drawIndexed(s_data->quadVertexArray);
+        s_data.quadVertexArray->bind();
+        RenderCommand::drawIndexed(s_data.quadVertexArray);
     }
 
     void Renderer2D::drawQuad(const glm::vec2 &position, const glm::vec2 &size, const Ref<Texture> &texture, float tilingFactor, const glm::vec4& tintColor) {
@@ -271,17 +317,17 @@ namespace Deimos {
     void Renderer2D::drawQuad(const glm::vec3 &position, const glm::vec2 &size, const Ref<Texture> &texture, float tilingFactor, const glm::vec4& tintColor) {
         DM_PROFILE_FUNCTION();
         
-        s_data->textureShader->bind();
+        s_data.textureShader->bind();
         texture->bind();
 
         glm::mat4 transform = glm::translate(glm::mat4(1.f), position) * glm::scale(glm::mat4(1.f), { size.x, size.y, 1.f });
-        s_data->textureShader->setMat4("u_transform", transform);
-        s_data->textureShader->setFloat4("u_color", tintColor);
-        s_data->textureShader->setInt("u_texture", 0);
-        s_data->textureShader->setFloat("u_tilingFactor", tilingFactor);
+        s_data.textureShader->setMat4("u_transform", transform);
+        s_data.textureShader->setFloat4("u_color", tintColor);
+        s_data.textureShader->setInt("u_texture", 0);
+        s_data.textureShader->setFloat("u_tilingFactor", tilingFactor);
 
-        s_data->quadVertexArray->bind();
-        RenderCommand::drawIndexed(s_data->quadVertexArray);
+        s_data.quadVertexArray->bind();
+        RenderCommand::drawIndexed(s_data.quadVertexArray);
     }
 
     /**@param rotation The rotation of the quad in radians*/
@@ -293,17 +339,17 @@ namespace Deimos {
     void Renderer2D::drawRotatedQuad(const glm::vec3 &position, const glm::vec2 &size, const Ref<Texture> &texture, float rotation, float tilingFactor, const glm::vec4& tintColor) {
         DM_PROFILE_FUNCTION()
 
-        s_data->textureShader->bind();
+        s_data.textureShader->bind();
         texture->bind();
 
         glm::mat4 transform = glm::translate(glm::mat4(1.f), position) * glm::rotate(glm::mat4(1.f), rotation, { 0, 0, 1}) * glm::scale(glm::mat4(1.f), { size.x, size.y, 1.f });
-        s_data->textureShader->setMat4("u_transform", transform);
-        s_data->textureShader->setFloat4("u_color", tintColor);
-        s_data->textureShader->setInt("u_texture", 0);
-        s_data->textureShader->setFloat("u_tilingFactor", tilingFactor);
+        s_data.textureShader->setMat4("u_transform", transform);
+        s_data.textureShader->setFloat4("u_color", tintColor);
+        s_data.textureShader->setInt("u_texture", 0);
+        s_data.textureShader->setFloat("u_tilingFactor", tilingFactor);
 
-        s_data->quadVertexArray->bind();
-        RenderCommand::drawIndexed(s_data->quadVertexArray);
+        s_data.quadVertexArray->bind();
+        RenderCommand::drawIndexed(s_data.quadVertexArray);
     }
 
     void Renderer2D::drawTriangle(const glm::vec2 &position, const glm::vec2 &size, const glm::vec4 &color, float tilingFactor, const glm::vec4 &tintColor) {
@@ -313,14 +359,14 @@ namespace Deimos {
     void Renderer2D::drawTriangle(const glm::vec3 &position, const glm::vec2 &size, const glm::vec4 &color, float tilingFactor, const glm::vec4 &tintColor) {
         DM_PROFILE_FUNCTION();
 
-        s_data->plainColorShader->bind();
+        s_data.plainColorShader->bind();
 
         glm::mat4 transform = glm::translate(glm::mat4(1.f), position) * glm::scale(glm::mat4(1.f), { size.x, size.y, 1.f} );
-        s_data->plainColorShader->setMat4("u_transform", transform);
-        s_data->plainColorShader->setFloat4("u_color", color * tintColor);
+        s_data.plainColorShader->setMat4("u_transform", transform);
+        s_data.plainColorShader->setFloat4("u_color", color * tintColor);
 
-        s_data->triangleVertexArray->bind();
-        RenderCommand::drawIndexed(s_data->triangleVertexArray);
+        s_data.triangleVertexArray->bind();
+        RenderCommand::drawIndexed(s_data.triangleVertexArray);
     }
 
     /**@param rotation The rotation of the triangle in radians*/
@@ -332,14 +378,14 @@ namespace Deimos {
     void Renderer2D::drawRotatedTriangle(const glm::vec3 &position, const glm::vec2 &size, const glm::vec4 &color, float rotation, float tilingFactor, const glm::vec4 &tintColor) {
         DM_PROFILE_FUNCTION();
 
-        s_data->plainColorShader->bind();
+        s_data.plainColorShader->bind();
 
         glm::mat4 transform = glm::translate(glm::mat4(1.f), position) * glm::rotate(glm::mat4(1.f), rotation, { 0, 0, 1}) * glm::scale(glm::mat4(1.f), { size.x, size.y, 1.f} );
-        s_data->plainColorShader->setMat4("u_transform", transform);
-        s_data->plainColorShader->setFloat4("u_color", color * tintColor);
+        s_data.plainColorShader->setMat4("u_transform", transform);
+        s_data.plainColorShader->setFloat4("u_color", color * tintColor);
 
-        s_data->triangleVertexArray->bind();
-        RenderCommand::drawIndexed(s_data->triangleVertexArray);
+        s_data.triangleVertexArray->bind();
+        RenderCommand::drawIndexed(s_data.triangleVertexArray);
     }
     
     void Renderer2D::drawCircle(const glm::vec2 &position, float radius, int vCount, const glm::vec4 &color, float tilingFactor, const glm::vec4 &tintColor) {
@@ -349,14 +395,14 @@ namespace Deimos {
     void Renderer2D::drawCircle(const glm::vec3 &position, float radius, int vCount, const glm::vec4 &color, float tilingFactor, const glm::vec4 &tintColor) {
         DM_PROFILE_FUNCTION();
 
-        s_data->plainColorShader->bind();
+        s_data.plainColorShader->bind();
 
         glm::mat4 transform = glm::translate(glm::mat4(1.f), position) * glm::scale(glm::mat4(1.f), { radius, radius, 1.f} );
-        s_data->plainColorShader->setMat4("u_transform", transform);
-        s_data->plainColorShader->setFloat4("u_color", color * tintColor);
+        s_data.plainColorShader->setMat4("u_transform", transform);
+        s_data.plainColorShader->setFloat4("u_color", color * tintColor);
 
-        s_data->circleVertexArray->bind();
-        RenderCommand::drawIndexed(s_data->circleVertexArray);
+        s_data.circleVertexArray->bind();
+        RenderCommand::drawIndexed(s_data.circleVertexArray);
     }
 
     /**@param rotation The rotation of the oval in radians*/
@@ -368,7 +414,7 @@ namespace Deimos {
     void Renderer2D::drawOval(const glm::vec3 &center, float a, float b, float rotation, const glm::vec4 &color, float tilingFactor, const glm::vec4 &tintColor) {
         DM_PROFILE_FUNCTION();
 
-        s_data->ovalVertexArray = VertexArray::create();
+        s_data.ovalVertexArray = VertexArray::create();
 
         float h = center.x;
         float k = center.y;
@@ -399,7 +445,7 @@ namespace Deimos {
 
         Ref<VertexBuffer> ovalVB = VertexBuffer::create(ovalVertices.data(), ovalVertices.size() * sizeof(float));
         ovalVB->setLayout({ { ShaderDataType::Float3, "a_position" } });
-        s_data->ovalVertexArray->addVertexBuffer(ovalVB);
+        s_data.ovalVertexArray->addVertexBuffer(ovalVB);
 
         std::vector<unsigned int> ovalIndices;
         ovalIndices.resize(3 * (vCount - 2));
@@ -410,13 +456,13 @@ namespace Deimos {
         }
 
         Ref<IndexBuffer> ovalIB = IndexBuffer::create(ovalIndices.data(), sizeof(unsigned int) * ovalIndices.size() / sizeof(unsigned int));
-        s_data->ovalVertexArray->setIndexBuffer(ovalIB);
-        s_data->plainColorShader->bind();
-        s_data->plainColorShader->setMat4("u_transform", glm::mat4(1.0f));
-        s_data->plainColorShader->setFloat4("u_color", color * tintColor);
+        s_data.ovalVertexArray->setIndexBuffer(ovalIB);
+        s_data.plainColorShader->bind();
+        s_data.plainColorShader->setMat4("u_transform", glm::mat4(1.0f));
+        s_data.plainColorShader->setFloat4("u_color", color * tintColor);
 
-        s_data->ovalVertexArray->bind();
-        RenderCommand::drawIndexed(s_data->ovalVertexArray);
+        s_data.ovalVertexArray->bind();
+        RenderCommand::drawIndexed(s_data.ovalVertexArray);
     }
 
 
@@ -427,7 +473,7 @@ namespace Deimos {
         polygonVertices.resize(vCount * 3);
         int triangleCount = vCount - 2; // the num of triangles that need to be drawn to make up the shape
 
-        s_data->polygonVertexArray = Deimos::VertexArray::create();
+        s_data.polygonVertexArray = Deimos::VertexArray::create();
 
         Ref<VertexBuffer> polygonVB; 
         for (size_t i = 0, j = 0; i < vCount; ++i) {
@@ -441,7 +487,7 @@ namespace Deimos {
                 {
                         { ShaderDataType::Float3, "a_position" },
                 });
-        s_data->polygonVertexArray->addVertexBuffer(polygonVB);
+        s_data.polygonVertexArray->addVertexBuffer(polygonVB);
 
         std::vector<unsigned int> polygonIndices;
         polygonIndices.resize(3 * triangleCount);
@@ -475,22 +521,22 @@ namespace Deimos {
         Ref<IndexBuffer> polygonIB;
         polygonIB = IndexBuffer::create(polygonIndices.data(), sizeof(unsigned int) * polygonIndices.size() / sizeof(unsigned int));
 
-        s_data->polygonVertexArray->setIndexBuffer(polygonIB);
+        s_data.polygonVertexArray->setIndexBuffer(polygonIB);
 
-        s_data->plainColorShader->bind();
+        s_data.plainColorShader->bind();
 
         glm::mat4 transform = glm::mat3(1.f);
-        s_data->plainColorShader->setMat4("u_transform", transform);
-        s_data->plainColorShader->setFloat4("u_color", color * tintColor);
+        s_data.plainColorShader->setMat4("u_transform", transform);
+        s_data.plainColorShader->setFloat4("u_color", color * tintColor);
 
-        s_data->polygonVertexArray->bind();
-        RenderCommand::drawIndexed(s_data->polygonVertexArray);
+        s_data.polygonVertexArray->bind();
+        RenderCommand::drawIndexed(s_data.polygonVertexArray);
     }
 
     void Renderer2D::drawBezier(const glm::vec3 &anchor1, const glm::vec3 &control, const glm::vec3 &anchor2, const glm::vec4 &color, float tilingFactor, const glm::vec4& tintColor) {
         DM_PROFILE_FUNCTION();
 
-        s_data->bezierVertexArray = VertexArray::create();
+        s_data.bezierVertexArray = VertexArray::create();
 
         float delta = 0.05; // distance between two consequential points
         int numComposingPoints = 1.f / delta + 1;
@@ -518,7 +564,7 @@ namespace Deimos {
                 {
                         { ShaderDataType::Float3, "a_position" },
                 });
-        s_data->bezierVertexArray->addVertexBuffer(bezierVB);
+        s_data.bezierVertexArray->addVertexBuffer(bezierVB);
 
         std::vector<unsigned int> bezierIndices;
         bezierIndices.resize(3 * triangleCount);
@@ -529,15 +575,15 @@ namespace Deimos {
         }
         Ref<IndexBuffer> bezierIB;
         bezierIB = IndexBuffer::create(bezierIndices.data(), sizeof(unsigned int) * bezierIndices.size() / sizeof(unsigned int));
-        s_data->bezierVertexArray->setIndexBuffer(bezierIB);
+        s_data.bezierVertexArray->setIndexBuffer(bezierIB);
 
-        s_data->plainColorShader->bind();
+        s_data.plainColorShader->bind();
 
         glm::mat4 transform = glm::mat3(1.f);
-        s_data->plainColorShader->setMat4("u_transform", transform);
-        s_data->plainColorShader->setFloat4("u_color", color * tintColor);
+        s_data.plainColorShader->setMat4("u_transform", transform);
+        s_data.plainColorShader->setFloat4("u_color", color * tintColor);
 
-        s_data->bezierVertexArray->bind();
-        RenderCommand::drawIndexed(s_data->bezierVertexArray);
+        s_data.bezierVertexArray->bind();
+        RenderCommand::drawIndexed(s_data.bezierVertexArray);
     }
 }

@@ -15,8 +15,8 @@ namespace Deimos {
             s_rendererAPI->clear();
         }
 
-        inline static void drawIndexed(const Ref<VertexArray>& vertexArray) {
-            s_rendererAPI->drawIndexed(vertexArray);
+        inline static void drawIndexed(const Ref<VertexArray>& vertexArray, uint32_t indexCount = 0.f) {
+            s_rendererAPI->drawIndexed(vertexArray, indexCount);
         }
 
         inline static void drawLine(const Ref<VertexArray>& vertexArray, float thickness = 3.f) {

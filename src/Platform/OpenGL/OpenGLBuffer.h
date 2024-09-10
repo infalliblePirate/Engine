@@ -8,6 +8,7 @@ namespace Deimos {
 
     class OpenGLVertexBuffer : public VertexBuffer{
     public:
+        OpenGLVertexBuffer(uint32_t size);
         OpenGLVertexBuffer(float* vertices, uint32_t size);
         virtual ~OpenGLVertexBuffer() override;
 
@@ -16,6 +17,8 @@ namespace Deimos {
 
         virtual const BufferLayout& getLayout() const override { return m_layout; }
         virtual void setLayout(const BufferLayout &layout) override { m_layout = layout; }
+
+        virtual void setData(const void* data, uint32_t size) override;
     private:
         uint32_t m_rendererID;
         BufferLayout m_layout;

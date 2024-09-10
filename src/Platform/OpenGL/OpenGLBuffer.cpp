@@ -6,7 +6,16 @@ namespace Deimos {
 
     ////////////////////////////////////////// Vertex Buffer ///////////////////////////////////////////////////
 
-    OpenGLVertexBuffer::OpenGLVertexBuffer(float* vertices, uint32_t size) {
+    OpenGLVertexBuffer::OpenGLVertexBuffer(uint32_t size) {
+        DM_PROFILE_FUNCTION();
+
+        glGenBuffers(1, &m_rendererID);
+        glBindBuffer(GL_ARRAY_BUFFER, m_rendererID);
+
+        glBufferData(GL_ARRAY_BUFFER, size, nullptr, GL_DYNAMIC_DRAW);
+    }
+
+    OpenGLVertexBuffer::OpenGLVertexBuffer(float *vertices, uint32_t size) {
         DM_PROFILE_FUNCTION();
 
         glGenBuffers(1, &m_rendererID);
@@ -33,6 +42,12 @@ namespace Deimos {
         glBindBuffer(GL_ARRAY_BUFFER, 0);
     }
 
+    void OpenGLVertexBuffer::setData(const void *data, uint32_t size) {
+        DM_PROFILE_FUNCTION();
+
+        glBindBuffer(GL_ARRAY_BUFFER, m_rendererID);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, size, data);
+    }
     ////////////////////////////////////////// Index Buffer ////////////////////////////////////////////////////
 
     OpenGLIndexBuffer::OpenGLIndexBuffer(uint32_t* indices, int count) : m_count(count){
