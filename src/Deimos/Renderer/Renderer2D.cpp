@@ -18,13 +18,17 @@ namespace Deimos {
         glm::vec3 position;
         glm::vec4 color;
         glm::vec2 texCoord;
-        // TODO: texid
+        float texID;
     };
 
     struct Renderer2DData {
         const uint32_t maxQuads = 10'000;
         const uint32_t maxVertices = maxQuads * 4;
         const uint32_t maxIndices = maxQuads * 6;
+        static const int maxSlots = 16; // TODO: derive from specs
+
+        std::array<Ref<Texture>, maxSlots> textures;
+        uint32_t index = 1; // 0 is reserved for white texture
 
         QuadVertex* quadVertexBufferBase = nullptr;
         QuadVertex* quadVertexBufferPtr = nullptr;
@@ -43,6 +47,7 @@ namespace Deimos {
         
         Ref<Shader> textureShader;
         Ref<Shader> plainColorShader;
+
         Ref<Texture2D> whiteTexture;
     };
 
@@ -50,6 +55,24 @@ namespace Deimos {
 
     void Renderer2D::init() {
         DM_PROFILE_FUNCTION();
+
+        s_data.whiteTexture = Texture2D::create(1, 1);
+        uint32_t whiteTextureData = 0xffffffff;
+        s_data.whiteTexture->setData(&whiteTextureData, sizeof(uint32_t));
+        s_data.textures[0] = s_data.whiteTexture;
+
+        s_data.textureShader = Shader::create(std::string(ASSETS_DIR) + "/shaders/Texture.glsl");
+        s_data.plainColorShader = Shader::create(std::string(ASSETS_DIR) + "/shaders/PlainColor.glsl");
+
+        s_data.textureShader->bind();
+        
+        // Array of sample slots
+        int samplers[s_data.maxSlots];
+        for (uint32_t i = 0; i < s_data.maxSlots; ++i)
+            samplers[i] = i;
+
+        s_data.textureShader->setIntVec("u_textures", samplers, s_data.maxSlots);
+
 
         // LINE
         {
@@ -75,130 +98,123 @@ namespace Deimos {
             lineIB = IndexBuffer::create(lineindices, sizeof(lineindices) / sizeof(unsigned int));
 
             s_data.lineVertexArray->setIndexBuffer(lineIB);
-
-            s_data.plainColorShader = Shader::create(std::string(ASSETS_DIR) + "/shaders/PlainColor.glsl");
         }
 
         // QUAD
-        s_data.quadVertexBufferBase = new QuadVertex[s_data.maxVertices];
-        s_data.quadVertexBufferPtr = s_data.quadVertexBufferBase;
+        {
+            s_data.quadVertexBufferBase = new QuadVertex[s_data.maxVertices];
+            s_data.quadVertexBufferPtr = s_data.quadVertexBufferBase;
 
-        s_data.quadVertexArray = Deimos::VertexArray::create();
+            s_data.quadVertexArray = Deimos::VertexArray::create();
 
-        s_data.quadVB = VertexBuffer::create(s_data.maxVertices * sizeof(QuadVertex));
-        s_data.quadVB->setLayout(
-                {
-                        { ShaderDataType::Float3, "a_position" },
-                        { ShaderDataType::Float4, "a_color" },
-                        { ShaderDataType::Float2, "a_texCoord" }
-                });
-        s_data.quadVertexArray->addVertexBuffer(s_data.quadVB);
+            s_data.quadVB = VertexBuffer::create(s_data.maxVertices * sizeof(QuadVertex));
+            s_data.quadVB->setLayout(
+                    {
+                            { ShaderDataType::Float3, "a_position" },
+                            { ShaderDataType::Float4, "a_color" },
+                            { ShaderDataType::Float2, "a_texCoord" },
+                            { ShaderDataType::Float,  "a_texID"}
+                    });
+            s_data.quadVertexArray->addVertexBuffer(s_data.quadVB);
 
-        unsigned int* quadIndices = new unsigned int[s_data.maxIndices];
+            unsigned int* quadIndices = new unsigned int[s_data.maxIndices];
 
-        uint32_t offset = 0;
-        for (size_t i = 0; i < s_data.maxIndices; i += 6) {
-            quadIndices[i + 0] = offset + 0;
-            quadIndices[i + 1] = offset + 1;
-            quadIndices[i + 2] = offset + 2;
-            
-            quadIndices[i + 3] = offset + 2;
-            quadIndices[i + 4] = offset + 3;
-            quadIndices[i + 5] = offset + 0;
+            uint32_t offset = 0;
+            for (size_t i = 0; i < s_data.maxIndices; i += 6) {
+                quadIndices[i + 0] = offset + 0;
+                quadIndices[i + 1] = offset + 1;
+                quadIndices[i + 2] = offset + 2;
+                
+                quadIndices[i + 3] = offset + 2;
+                quadIndices[i + 4] = offset + 3;
+                quadIndices[i + 5] = offset + 0;
 
-            offset += 4;
+                offset += 4;
+            }
+
+            Ref<IndexBuffer> quadIB = IndexBuffer::create(quadIndices, s_data.maxIndices);
+            s_data.quadVertexArray->setIndexBuffer(quadIB);
+            delete[] quadIndices;
         }
 
-        Ref<IndexBuffer> quadIB = IndexBuffer::create(quadIndices, s_data.maxIndices);
-        s_data.quadVertexArray->setIndexBuffer(quadIB);
-        delete[] quadIndices;
-
-        s_data.textureShader = Shader::create(std::string(ASSETS_DIR) + "/shaders/Texture.glsl");
-
-        s_data.whiteTexture = Texture2D::create(1, 1);
-        uint32_t whiteTextureData = 0xffffffff;
-        s_data.whiteTexture->setData(&whiteTextureData, sizeof(uint32_t));
-
-        s_data.textureShader->bind();
-        s_data.textureShader->setInt("u_texture", 0);
-
         // TRIANGLE:
-        s_data.triangleVertexArray = VertexArray::create();
-        float triangleVertices[3 * 3]{
-            -0.5f, -0.5f, 0.0f, 
-            0.5f, -0.5f, 0.0f,
-            0.0f, 0.5f, 0.0f
-        };
+        {
+                s_data.triangleVertexArray = VertexArray::create();
+            float triangleVertices[3 * 3]{
+                -0.5f, -0.5f, 0.0f, 
+                0.5f, -0.5f, 0.0f,
+                0.0f, 0.5f, 0.0f
+            };
 
-        Ref<VertexBuffer> triangleVB;
-        triangleVB = VertexBuffer::create(triangleVertices, sizeof(triangleVertices));
-        triangleVB->setLayout(
-            {
-                { ShaderDataType::Float3, "a_position" }
-            }
-        );
+            Ref<VertexBuffer> triangleVB;
+            triangleVB = VertexBuffer::create(triangleVertices, sizeof(triangleVertices));
+            triangleVB->setLayout(
+                {
+                    { ShaderDataType::Float3, "a_position" }
+                }
+            );
 
-        s_data.triangleVertexArray->addVertexBuffer(triangleVB);
+            s_data.triangleVertexArray->addVertexBuffer(triangleVB);
 
-        unsigned int triangleindices[3] = { 0, 1, 2 };
+            unsigned int triangleindices[3] = { 0, 1, 2 };
 
-        Ref<IndexBuffer> triangleIB;
-        triangleIB = IndexBuffer::create(triangleindices, sizeof(triangleindices) / sizeof(unsigned int));
+            Ref<IndexBuffer> triangleIB;
+            triangleIB = IndexBuffer::create(triangleindices, sizeof(triangleindices) / sizeof(unsigned int));
 
-        s_data.triangleVertexArray->setIndexBuffer(triangleIB);
-
-        s_data.plainColorShader = Shader::create(std::string(ASSETS_DIR) + "/shaders/PlainColor.glsl");
-
+            s_data.triangleVertexArray->setIndexBuffer(triangleIB);
+        }
 
         // CIRCLE
         // TODO change from predefined behaviour
-        int vCount = 32; // count of "angles" in a circle
-        float angle = 360.f / vCount;
-        int triangleCount = vCount - 2;
+        {
+            int vCount = 32; // count of "angles" in a circle
+            float angle = 360.f / vCount;
+            int triangleCount = vCount - 2;
 
-        std::vector<glm::vec3> temp;
+            std::vector<glm::vec3> temp;
 
-        // positions
-        for (size_t i = 0; i < vCount; ++i) {
-            float x = cos(glm::radians(angle * i));
-            float y = sin(glm::radians(angle * i));
-            float z = 0.f;
+            // positions
+            for (size_t i = 0; i < vCount; ++i) {
+                float x = cos(glm::radians(angle * i));
+                float y = sin(glm::radians(angle * i));
+                float z = 0.f;
 
-            temp.push_back(glm::vec3(x, y, z));
-        }
-
-        s_data.circleVertexArray = VertexArray::create();
-
-        std::vector<float> circleVertices;
-        circleVertices.reserve(3 * vCount); // create circle vertices array
-        for (size_t i = 0; i < vCount; ++i) {
-            circleVertices.push_back(temp[i].x);
-            circleVertices.push_back(temp[i].y);
-            circleVertices.push_back(temp[i].z);
-        }
-
-        Ref<VertexBuffer> circleVB;
-        circleVB = VertexBuffer::create(circleVertices.data(), sizeof(float) * circleVertices.size());
-        circleVB->setLayout(
-            {
-                { ShaderDataType::Float3, "a_position"}
+                temp.push_back(glm::vec3(x, y, z));
             }
-        );
 
-        s_data.circleVertexArray->addVertexBuffer(circleVB);
+            s_data.circleVertexArray = VertexArray::create();
 
-       std::vector<unsigned int> circleIndices;
-       circleIndices.resize(3 * triangleCount);
-        for (size_t i = 0; i < triangleCount; ++i) {
-            circleIndices.push_back(0); // origin
-            circleIndices.push_back(i + 1);
-            circleIndices.push_back(i + 2);
+            std::vector<float> circleVertices;
+            circleVertices.reserve(3 * vCount); // create circle vertices array
+            for (size_t i = 0; i < vCount; ++i) {
+                circleVertices.push_back(temp[i].x);
+                circleVertices.push_back(temp[i].y);
+                circleVertices.push_back(temp[i].z);
+            }
+
+            Ref<VertexBuffer> circleVB;
+            circleVB = VertexBuffer::create(circleVertices.data(), sizeof(float) * circleVertices.size());
+            circleVB->setLayout(
+                {
+                    { ShaderDataType::Float3, "a_position"}
+                }
+            );
+
+            s_data.circleVertexArray->addVertexBuffer(circleVB);
+
+        std::vector<unsigned int> circleIndices;
+        circleIndices.resize(3 * triangleCount);
+            for (size_t i = 0; i < triangleCount; ++i) {
+                circleIndices.push_back(0); // origin
+                circleIndices.push_back(i + 1);
+                circleIndices.push_back(i + 2);
+            }
+
+            Ref<IndexBuffer> circleIB;
+            circleIB = IndexBuffer::create(circleIndices.data(), sizeof(unsigned int) * circleIndices.size() / sizeof(unsigned int));
+
+            s_data.circleVertexArray->setIndexBuffer(circleIB);
         }
-
-        Ref<IndexBuffer> circleIB;
-        circleIB = IndexBuffer::create(circleIndices.data(), sizeof(unsigned int) * circleIndices.size() / sizeof(unsigned int));
-
-        s_data.circleVertexArray->setIndexBuffer(circleIB);
     }
 
     void Renderer2D::shutdown() {
@@ -222,9 +238,15 @@ namespace Deimos {
         DM_PROFILE_FUNCTION();
 
         uint32_t size = (uint8_t*)s_data.quadVertexBufferPtr - (uint8_t*)s_data.quadVertexBufferBase;
-        s_data.quadVB->setData(s_data.quadVertexBufferBase, size * sizeof(QuadVertex));
+        s_data.quadVB->setData(s_data.quadVertexBufferBase, size);
         
         s_data.quadVertexArray->bind();
+         // Bind textures to some slots
+        for (uint32_t i = 0; i < s_data.index; ++i) {
+            s_data.textures[i]->bind(i);
+            //std::cout << s_data.textures[i]->getID() << std::endl;
+        }
+        
         RenderCommand::drawIndexed(s_data.quadVertexArray, s_data.quadIndexCount);
     }
 
@@ -268,21 +290,25 @@ namespace Deimos {
         s_data.quadVertexBufferPtr->position = position;
         s_data.quadVertexBufferPtr->color = color;
         s_data.quadVertexBufferPtr->texCoord = { 0, 0 };
+        s_data.quadVertexBufferPtr->texID = 0.f;
         s_data.quadVertexBufferPtr++;
 
         s_data.quadVertexBufferPtr->position = { position.x + size.x, position.y, position.z };
         s_data.quadVertexBufferPtr->color = color;
         s_data.quadVertexBufferPtr->texCoord = { 1, 0 };
+        s_data.quadVertexBufferPtr->texID = 0.f;
         s_data.quadVertexBufferPtr++;
 
         s_data.quadVertexBufferPtr->position = { position.x + size.x, position.y + size.y, position.z };
         s_data.quadVertexBufferPtr->color = color;
         s_data.quadVertexBufferPtr->texCoord = { 1, 1 };
+        s_data.quadVertexBufferPtr->texID = 0.f;
         s_data.quadVertexBufferPtr++;
 
         s_data.quadVertexBufferPtr->position = { position.x, position.y + size.y, position.z };
         s_data.quadVertexBufferPtr->color = color;
         s_data.quadVertexBufferPtr->texCoord = { 0, 1 };
+        s_data.quadVertexBufferPtr->texID = 0.f;
         s_data.quadVertexBufferPtr++;
 
         s_data.quadIndexCount += 6;
@@ -316,18 +342,47 @@ namespace Deimos {
 
     void Renderer2D::drawQuad(const glm::vec3 &position, const glm::vec2 &size, const Ref<Texture> &texture, float tilingFactor, const glm::vec4& tintColor) {
         DM_PROFILE_FUNCTION();
-        
+
+        uint32_t index = 0;
+        for (uint32_t i = 1; i < s_data.index; ++i) {
+            if (*s_data.textures[i].get() == *texture.get()) {
+                index = i;
+                break;
+            }
+        }
+        if (!index) {
+            s_data.textures[s_data.index] = texture;
+            index = s_data.index;
+            s_data.index++;
+        }
+
         s_data.textureShader->bind();
-        texture->bind();
 
-        glm::mat4 transform = glm::translate(glm::mat4(1.f), position) * glm::scale(glm::mat4(1.f), { size.x, size.y, 1.f });
-        s_data.textureShader->setMat4("u_transform", transform);
-        s_data.textureShader->setFloat4("u_color", tintColor);
-        s_data.textureShader->setInt("u_texture", 0);
-        s_data.textureShader->setFloat("u_tilingFactor", tilingFactor);
+        s_data.quadVertexBufferPtr->position = position;
+        s_data.quadVertexBufferPtr->color = tintColor;
+        s_data.quadVertexBufferPtr->texCoord = { 0, 0 };
+        s_data.quadVertexBufferPtr->texID = index;
+        s_data.quadVertexBufferPtr++;
 
-        s_data.quadVertexArray->bind();
-        RenderCommand::drawIndexed(s_data.quadVertexArray);
+        s_data.quadVertexBufferPtr->position = { position.x + size.x, position.y, position.z };
+        s_data.quadVertexBufferPtr->color = tintColor;
+        s_data.quadVertexBufferPtr->texCoord = { 1, 0 };
+        s_data.quadVertexBufferPtr->texID = index;
+        s_data.quadVertexBufferPtr++;
+
+        s_data.quadVertexBufferPtr->position = { position.x + size.x, position.y + size.y, position.z };
+        s_data.quadVertexBufferPtr->color = tintColor;
+        s_data.quadVertexBufferPtr->texCoord = { 1, 1 };
+        s_data.quadVertexBufferPtr->texID = index;
+        s_data.quadVertexBufferPtr++;
+
+        s_data.quadVertexBufferPtr->position = { position.x, position.y + size.y, position.z };
+        s_data.quadVertexBufferPtr->color = tintColor;
+        s_data.quadVertexBufferPtr->texCoord = { 0, 1 };
+        s_data.quadVertexBufferPtr->texID = index;
+        s_data.quadVertexBufferPtr++;
+
+        s_data.quadIndexCount += 6;
     }
 
     /**@param rotation The rotation of the quad in radians*/

@@ -22,6 +22,7 @@ namespace Deimos {
         virtual void setFloat3(const std::string &name, const glm::vec3 &value) override;
         virtual void setFloat4(const std::string &name, const glm::vec4 &value) override;
         virtual void setMat4(const std::string &name, const glm::mat4 &value) override;
+        virtual void setIntVec(const std::string &name, const int* value, int count) override;
 
         void uploadUniformInt(const std::string& name, int value);
 
@@ -32,6 +33,8 @@ namespace Deimos {
 
         void uploadUniformMat4(const std::string& name, const glm::mat4& matrix);
         void uploadUniformMat3(const std::string& name, const glm::mat3& matrix);
+
+        void uploadUniformIntVec(const std::string& name, const int* array, int count);
     private:
         std::string readFile(const std::string& filepath);
         std::unordered_map<GLenum, std::string> preprocess(const std::string& source);

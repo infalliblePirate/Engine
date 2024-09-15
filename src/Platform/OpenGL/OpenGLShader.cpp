@@ -193,6 +193,12 @@ namespace Deimos {
         uploadUniformMat4(name, value);
     }
 
+    void OpenGLShader::setIntVec(const std::string &name, const int *value, int count) {
+        DM_PROFILE_FUNCTION();
+
+        uploadUniformIntVec(name, value, count);
+    }
+
     void OpenGLShader::uploadUniformInt(const std::string &name, int value) {
         GLint location = glGetUniformLocation(m_rendererID, name.c_str());
         glUniform1i(location, value);
@@ -226,5 +232,10 @@ namespace Deimos {
     void OpenGLShader::uploadUniformMat4(const std::string &name, const glm::mat4 &matrix) {
         GLint location = glGetUniformLocation(m_rendererID, name.c_str());
         glad_glUniformMatrix4fv(location, 1, GL_FALSE, glm::value_ptr(matrix));
+    }
+
+    void OpenGLShader::uploadUniformIntVec(const std::string &name, const int *array, int count) {
+        GLint location = glGetUniformLocation(m_rendererID, name.c_str());
+        glad_glUniform1iv(location, count, array);
     }
 }

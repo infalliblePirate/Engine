@@ -50,6 +50,7 @@ namespace Deimos {
 
     void OpenGLVertexArray::addVertexBuffer(const Ref<VertexBuffer> &vertexBuffer) {
         DM_PROFILE_FUNCTION();
+        auto layout1 = vertexBuffer->getLayout();
 
         DM_CORE_ASSERT(vertexBuffer->getLayout().getElements().size(), "Vertex Buffer has no layout!");
 

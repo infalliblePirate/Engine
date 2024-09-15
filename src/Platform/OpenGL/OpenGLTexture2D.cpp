@@ -64,9 +64,13 @@ namespace Deimos {
         glDeleteTextures(1, &m_rendererID);
     }
 
+    uint32_t OpenGLTexture2D::getID() const {
+        return m_rendererID;
+    }
+
     void OpenGLTexture2D::bind(uint32_t slot) const {
         DM_PROFILE_FUNCTION();
-
+        
         glBindTextureUnit(slot, m_rendererID);
     }
 
@@ -76,5 +80,9 @@ namespace Deimos {
         uint32_t bpp = m_dataFormat == GL_RGBA ? 4 : 3;
         DM_CORE_ASSERT(size == m_width * m_height * bpp, "Data must be entire texture!");
         glTextureSubImage2D(m_rendererID, 0, 0, 0, m_width, m_height, m_dataFormat, GL_UNSIGNED_BYTE, data);
+    }
+    
+    bool OpenGLTexture2D::operator==(const Texture &other) {
+        return this->m_rendererID == other.getID();
     }
 }
