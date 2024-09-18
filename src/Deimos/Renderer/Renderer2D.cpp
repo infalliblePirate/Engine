@@ -49,6 +49,8 @@ namespace Deimos {
         Ref<Shader> plainColorShader;
 
         Ref<Texture2D> whiteTexture;
+
+        glm::vec4 QuadVertexPositions[4];
     };
 
     static Renderer2DData s_data;
@@ -72,6 +74,11 @@ namespace Deimos {
             samplers[i] = i;
 
         s_data.textureShader->setIntVec("u_textures", samplers, s_data.maxSlots);
+
+        s_data.QuadVertexPositions[0] = { -0.5f, -0.5f, 0.0f, 1.0f };
+        s_data.QuadVertexPositions[1] = { 0.5f, -0.5f, 0.0f, 1.0f };
+        s_data.QuadVertexPositions[2] = {  0.5f,  0.5f, 0.0f, 1.0f };
+		s_data.QuadVertexPositions[3] = { -0.5f,  0.5f, 0.0f, 1.0f };
 
 
         // LINE
@@ -244,7 +251,6 @@ namespace Deimos {
          // Bind textures to some slots
         for (uint32_t i = 0; i < s_data.index; ++i) {
             s_data.textures[i]->bind(i);
-            //std::cout << s_data.textures[i]->getID() << std::endl;
         }
         
         RenderCommand::drawIndexed(s_data.quadVertexArray, s_data.quadIndexCount);
@@ -285,30 +291,34 @@ namespace Deimos {
     void Renderer2D::drawQuad(const glm::vec3 &position, const glm::vec2 &size, const glm::vec4 &color, float tilingFactor, const glm::vec4& tintColor) {
         DM_PROFILE_FUNCTION();
 
+        const float textureIdex = 0.f; // white texture
+
+        glm::mat4 transfrom = glm::translate(glm::mat4(1.f), position) * glm::scale(glm::mat4(1.f), { size.x, size.y, 1.f });
+
         s_data.textureShader->bind();
 
-        s_data.quadVertexBufferPtr->position = position;
+        s_data.quadVertexBufferPtr->position = transfrom * s_data.QuadVertexPositions[0];
         s_data.quadVertexBufferPtr->color = color;
         s_data.quadVertexBufferPtr->texCoord = { 0, 0 };
-        s_data.quadVertexBufferPtr->texID = 0.f;
+        s_data.quadVertexBufferPtr->texID = textureIdex;
         s_data.quadVertexBufferPtr++;
 
-        s_data.quadVertexBufferPtr->position = { position.x + size.x, position.y, position.z };
+        s_data.quadVertexBufferPtr->position = transfrom * s_data.QuadVertexPositions[1];
         s_data.quadVertexBufferPtr->color = color;
         s_data.quadVertexBufferPtr->texCoord = { 1, 0 };
-        s_data.quadVertexBufferPtr->texID = 0.f;
+        s_data.quadVertexBufferPtr->texID = textureIdex;
         s_data.quadVertexBufferPtr++;
 
-        s_data.quadVertexBufferPtr->position = { position.x + size.x, position.y + size.y, position.z };
+        s_data.quadVertexBufferPtr->position = transfrom * s_data.QuadVertexPositions[2];
         s_data.quadVertexBufferPtr->color = color;
         s_data.quadVertexBufferPtr->texCoord = { 1, 1 };
-        s_data.quadVertexBufferPtr->texID = 0.f;
+        s_data.quadVertexBufferPtr->texID = textureIdex;
         s_data.quadVertexBufferPtr++;
 
-        s_data.quadVertexBufferPtr->position = { position.x, position.y + size.y, position.z };
+        s_data.quadVertexBufferPtr->position = transfrom * s_data.QuadVertexPositions[3];
         s_data.quadVertexBufferPtr->color = color;
         s_data.quadVertexBufferPtr->texCoord = { 0, 1 };
-        s_data.quadVertexBufferPtr->texID = 0.f;
+        s_data.quadVertexBufferPtr->texID = textureIdex;
         s_data.quadVertexBufferPtr++;
 
         s_data.quadIndexCount += 6;
@@ -323,17 +333,39 @@ namespace Deimos {
     void Renderer2D::drawRotatedQuad(const glm::vec3 &position, const glm::vec2 &size, const glm::vec4 &color, float rotation, float tilingFactor, const glm::vec4& tintColor) {
         DM_PROFILE_FUNCTION()
 
+        const float textureIdex = 0.f; // white texture
+
+        glm::mat4 transfrom = glm::translate(glm::mat4(1.f), position)
+                              * glm::rotate(glm::mat4(1.f), glm::radians(rotation), { 0.f, 0.f, 1.f })
+                              * glm::scale(glm::mat4(1.f), { size.x, size.y, 1.f });
+
         s_data.textureShader->bind();
-        s_data.whiteTexture->bind();
 
-        glm::mat4 transform = glm::translate(glm::mat4(1.f), position) * glm::rotate(glm::mat4(1.f), rotation, { 0, 0, 1}) * glm::scale(glm::mat4(1.f), { size.x, size.y, 1.f });
-        s_data.textureShader->setMat4("u_transform", transform);
-        s_data.textureShader->setFloat4("u_color", color * tintColor);
-        s_data.textureShader->setInt("u_texture", 0);
-        s_data.textureShader->setFloat("u_tilingFactor", tilingFactor);
+        s_data.quadVertexBufferPtr->position = transfrom * s_data.QuadVertexPositions[0];
+        s_data.quadVertexBufferPtr->color = color;
+        s_data.quadVertexBufferPtr->texCoord = { 0, 0 };
+        s_data.quadVertexBufferPtr->texID = textureIdex;
+        s_data.quadVertexBufferPtr++;
 
-        s_data.quadVertexArray->bind();
-        RenderCommand::drawIndexed(s_data.quadVertexArray);
+        s_data.quadVertexBufferPtr->position = transfrom * s_data.QuadVertexPositions[1];
+        s_data.quadVertexBufferPtr->color = color;
+        s_data.quadVertexBufferPtr->texCoord = { 1, 0 };
+        s_data.quadVertexBufferPtr->texID = textureIdex;
+        s_data.quadVertexBufferPtr++;
+
+        s_data.quadVertexBufferPtr->position = transfrom * s_data.QuadVertexPositions[2];
+        s_data.quadVertexBufferPtr->color = color;
+        s_data.quadVertexBufferPtr->texCoord = { 1, 1 };
+        s_data.quadVertexBufferPtr->texID = textureIdex;
+        s_data.quadVertexBufferPtr++;
+
+        s_data.quadVertexBufferPtr->position = transfrom * s_data.QuadVertexPositions[3];
+        s_data.quadVertexBufferPtr->color = color;
+        s_data.quadVertexBufferPtr->texCoord = { 0, 1 };
+        s_data.quadVertexBufferPtr->texID = textureIdex;
+        s_data.quadVertexBufferPtr++;
+
+        s_data.quadIndexCount += 6;
     }
 
     void Renderer2D::drawQuad(const glm::vec2 &position, const glm::vec2 &size, const Ref<Texture> &texture, float tilingFactor, const glm::vec4& tintColor) {
@@ -342,6 +374,8 @@ namespace Deimos {
 
     void Renderer2D::drawQuad(const glm::vec3 &position, const glm::vec2 &size, const Ref<Texture> &texture, float tilingFactor, const glm::vec4& tintColor) {
         DM_PROFILE_FUNCTION();
+
+        glm::mat4 transfrom = glm::translate(glm::mat4(1.f), position) * glm::scale(glm::mat4(1.f), { size.x, size.y, 1.f });
 
         uint32_t index = 0;
         for (uint32_t i = 1; i < s_data.index; ++i) {
@@ -358,25 +392,25 @@ namespace Deimos {
 
         s_data.textureShader->bind();
 
-        s_data.quadVertexBufferPtr->position = position;
+        s_data.quadVertexBufferPtr->position = transfrom * s_data.QuadVertexPositions[0];
         s_data.quadVertexBufferPtr->color = tintColor;
         s_data.quadVertexBufferPtr->texCoord = { 0, 0 };
         s_data.quadVertexBufferPtr->texID = index;
         s_data.quadVertexBufferPtr++;
 
-        s_data.quadVertexBufferPtr->position = { position.x + size.x, position.y, position.z };
+        s_data.quadVertexBufferPtr->position = transfrom * s_data.QuadVertexPositions[1];
         s_data.quadVertexBufferPtr->color = tintColor;
         s_data.quadVertexBufferPtr->texCoord = { 1, 0 };
         s_data.quadVertexBufferPtr->texID = index;
         s_data.quadVertexBufferPtr++;
 
-        s_data.quadVertexBufferPtr->position = { position.x + size.x, position.y + size.y, position.z };
+        s_data.quadVertexBufferPtr->position = transfrom * s_data.QuadVertexPositions[2];
         s_data.quadVertexBufferPtr->color = tintColor;
         s_data.quadVertexBufferPtr->texCoord = { 1, 1 };
         s_data.quadVertexBufferPtr->texID = index;
         s_data.quadVertexBufferPtr++;
 
-        s_data.quadVertexBufferPtr->position = { position.x, position.y + size.y, position.z };
+        s_data.quadVertexBufferPtr->position = transfrom * s_data.QuadVertexPositions[3];
         s_data.quadVertexBufferPtr->color = tintColor;
         s_data.quadVertexBufferPtr->texCoord = { 0, 1 };
         s_data.quadVertexBufferPtr->texID = index;
@@ -385,26 +419,60 @@ namespace Deimos {
         s_data.quadIndexCount += 6;
     }
 
-    /**@param rotation The rotation of the quad in radians*/
+    /**@param rotation The rotation of the quad in degrees*/
     void Renderer2D::drawRotatedQuad(const glm::vec2 &position, const glm::vec2 &size, const Ref<Texture> &texture, float rotation, float tilingFactor, const glm::vec4& tintColor) {
         drawRotatedQuad({ position.x, position.y, 0.f }, size, texture, rotation, tilingFactor, tintColor);
     }
 
-    /**@param rotation The rotation of the quad in radians*/
+    /**@param rotation The rotation of the quad in degrees*/
     void Renderer2D::drawRotatedQuad(const glm::vec3 &position, const glm::vec2 &size, const Ref<Texture> &texture, float rotation, float tilingFactor, const glm::vec4& tintColor) {
         DM_PROFILE_FUNCTION()
 
+        glm::mat4 transfrom = glm::translate(glm::mat4(1.f), position)
+                              * glm::rotate(glm::mat4(1.f), glm::radians(rotation), { 0.f, 0.f, 1.f })
+                              * glm::scale(glm::mat4(1.f), { size.x, size.y, 1.f });
+
+        uint32_t index = 0;
+        for (uint32_t i = 1; i < s_data.index; ++i) {
+            if (*s_data.textures[i].get() == *texture.get()) {
+                index = i;
+                break;
+            }
+        }
+        if (!index) {
+            s_data.textures[s_data.index] = texture;
+            index = s_data.index;
+            s_data.index++;
+        }
+
         s_data.textureShader->bind();
-        texture->bind();
 
-        glm::mat4 transform = glm::translate(glm::mat4(1.f), position) * glm::rotate(glm::mat4(1.f), rotation, { 0, 0, 1}) * glm::scale(glm::mat4(1.f), { size.x, size.y, 1.f });
-        s_data.textureShader->setMat4("u_transform", transform);
-        s_data.textureShader->setFloat4("u_color", tintColor);
-        s_data.textureShader->setInt("u_texture", 0);
-        s_data.textureShader->setFloat("u_tilingFactor", tilingFactor);
+        s_data.quadVertexBufferPtr->position = transfrom * s_data.QuadVertexPositions[0];
+        s_data.quadVertexBufferPtr->color = tintColor;
+        s_data.quadVertexBufferPtr->texCoord = { 0, 0 };
+        s_data.quadVertexBufferPtr->texID = index;
+        s_data.quadVertexBufferPtr++;
 
-        s_data.quadVertexArray->bind();
-        RenderCommand::drawIndexed(s_data.quadVertexArray);
+        s_data.quadVertexBufferPtr->position = transfrom * s_data.QuadVertexPositions[1];
+        s_data.quadVertexBufferPtr->color = tintColor;
+        s_data.quadVertexBufferPtr->texCoord = { 1, 0 };
+        s_data.quadVertexBufferPtr->texID = index;
+        s_data.quadVertexBufferPtr++;
+
+        s_data.quadVertexBufferPtr->position = transfrom * s_data.QuadVertexPositions[2];
+        s_data.quadVertexBufferPtr->color = tintColor;
+        s_data.quadVertexBufferPtr->texCoord = { 1, 1 };
+        s_data.quadVertexBufferPtr->texID = index;
+        s_data.quadVertexBufferPtr++;
+
+        s_data.quadVertexBufferPtr->position = transfrom * s_data.QuadVertexPositions[3];
+        s_data.quadVertexBufferPtr->color = tintColor;
+        s_data.quadVertexBufferPtr->texCoord = { 0, 1 };
+        s_data.quadVertexBufferPtr->texID = index;
+        s_data.quadVertexBufferPtr++;
+
+        s_data.quadIndexCount += 6;
+       
     }
 
     void Renderer2D::drawTriangle(const glm::vec2 &position, const glm::vec2 &size, const glm::vec4 &color, float tilingFactor, const glm::vec4 &tintColor) {
